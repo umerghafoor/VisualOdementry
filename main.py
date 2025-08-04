@@ -39,6 +39,10 @@ def main():
     color = np.random.randint(0, 255, (5000, 3))
 
     vo = MonoVideoOdometery(img_path, pose_path, focal, pp, lk_params)
+    
+    # Set curve detection sensitivity optimized for real-world data
+    vo.set_curve_sensitivity(threshold=0.015, window=10, analysis_window=20)
+    
     traj = np.zeros(shape=(600, 800, 3))
 
     flag = True
@@ -59,6 +63,14 @@ def main():
             mask = np.zeros_like(vo.current_frame)
 
         vo.process_frame()
+
+        # Add visual indicator on trajectory for curves (without printing - curve detection prints automatically)
+        if vo.is_currently_in_curve():
+            # Add visual indicator on trajectory
+            mono_coord = vo.get_mono_coordinates()
+            draw_x, draw_y, draw_z = [int(round(x)) for x in mono_coord]
+            # Draw larger circle for curve points
+            traj = cv.circle(traj, (draw_x + 400, draw_z + 100), 5, list((255, 0, 255)), -1)  # Magenta for curves
 
         good_points = vo.get_selected_points()
 
@@ -89,14 +101,22 @@ def main():
         traj = cv.circle(traj, (true_x + 400, true_z + 100), 1, list((0, 0, 255)), 4)
         traj = cv.circle(traj, (draw_x + 400, draw_z + 100), 1, list((0, 255, 0)), 4)
 
-        # cv.putText(traj, 'Actual Position:', (140, 90), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        # cv.putText(traj, 'Red', (270, 90), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-        # cv.putText(traj, 'Estimated Odometry Position:', (30, 120), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        # cv.putText(traj, 'Green', (270, 120), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        # Add legend for curve detection
+        cv.putText(traj, 'Actual Position: Red', (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+        cv.putText(traj, 'Estimated Position: Green', (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+        cv.putText(traj, 'Sharp Curves: Magenta', (10, 70), cv.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
 
         cv.imshow('trajectory', traj)
 
     cv.imwrite("./images/trajectory.png", traj)
+
+    # Print curve detection summary
+    stats = vo.get_curve_statistics()
+    print("\n=== Curve Detection Summary ===")
+    print(f"Total sharp curves detected: {stats['total_curves']}")
+    if stats['total_curves'] > 0:
+        print(f"Average rotation rate: {stats['average_rotation_rate']:.4f} rad/frame")
+        print(f"Maximum rotation rate: {stats['max_rotation_rate']:.4f} rad/frame")
 
     cv.destroyAllWindows()
 
