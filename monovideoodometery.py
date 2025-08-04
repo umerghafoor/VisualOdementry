@@ -46,6 +46,7 @@ class MonoVideoOdometery(object):
         self.in_curve = False  # Flag to track if currently in a curve (prevents multiple prints)
         self.curve_start_frame = None  # Track when a curve started
         self.cumulative_rotation = 0  # Track total rotation over longer period
+        self.current_turn_direction = None  # Track current turn direction: 'left', 'right', or None
 
         try:
             if not all([".png" in x for x in os.listdir(img_file_path)]):
@@ -252,6 +253,65 @@ class MonoVideoOdometery(object):
         # Keep only recent history for curve detection
         if len(self.yaw_angles) > self.curve_window * 2:
             self.yaw_angles = self.yaw_angles[-self.curve_window * 2:]
+
+    def determine_turn_direction(self):
+        '''Determine the direction of turn based on yaw angle changes
+        
+        Returns:
+            str -- 'left', 'right', or 'straight' based on rotation direction
+        '''
+        if len(self.yaw_angles) < 3:
+            return 'straight'
+        
+        # Use multiple frames to determine consistent direction
+        window_size = min(5, len(self.yaw_angles))
+        recent_yaws = self.yaw_angles[-window_size:]
+        
+        # Calculate differences to determine direction
+        differences = []
+        for i in range(1, len(recent_yaws)):
+            diff = recent_yaws[i] - recent_yaws[i-1]
+            
+            # Handle angle wrapping (crossing from -pi to pi or vice versa)
+            if diff > np.pi:
+                diff -= 2 * np.pi
+            elif diff < -np.pi:
+                diff += 2 * np.pi
+                
+            differences.append(diff)
+        
+        # Count positive vs negative changes (with noise threshold)
+        noise_threshold = 0.003  # Small threshold to ignore noise
+        left_count = sum(1 for d in differences if d > noise_threshold)
+        right_count = sum(1 for d in differences if d < -noise_threshold)
+        
+        # Determine direction based on majority
+        if left_count > right_count and left_count >= 2:
+            return 'left'
+        elif right_count > left_count and right_count >= 2:
+            return 'right'
+        else:
+            return 'straight'
+    
+    def get_turn_angle_magnitude(self):
+        '''Calculate the magnitude of the current turn
+        
+        Returns:
+            float -- Absolute turn angle magnitude over the analysis window
+        '''
+        if len(self.yaw_angles) < self.curve_window:
+            return 0.0
+            
+        recent_yaws = self.yaw_angles[-self.curve_window:]
+        total_rotation = recent_yaws[-1] - recent_yaws[0]
+        
+        # Handle angle wrapping
+        if total_rotation > np.pi:
+            total_rotation -= 2 * np.pi
+        elif total_rotation < -np.pi:
+            total_rotation += 2 * np.pi
+            
+        return abs(total_rotation)
 
     def detect_sharp_curves(self):
         '''Detect sharp curves based on multiple analysis methods for real-world data
