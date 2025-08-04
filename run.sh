@@ -1,0 +1,1 @@
+python main.py --img_path /mnt/1C00FF7F00FF5DE8/Users/datasets/data_odometry_gray/dataset/sequences/00/image_0/ --pose_path /mnt/1C00FF7F00FF5DE8/Users/datasets/data_odometry_poses/dataset/poses/00.txt 
